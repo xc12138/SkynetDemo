@@ -7,7 +7,7 @@ service.isWorking = false
 service.update = function(frame)
     if service.isWorking then
         service.money = service.money + 1
-        skynet.error(worker_name .. tostring(worker_id) .. ", Money：" .. tostring(service.money))
+        skynet.error(service.name .. tostring(service.id) .. ", Money：" .. tostring(service.money))
     end
 end
 
