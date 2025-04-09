@@ -8,7 +8,7 @@ skynet.start(function()
     local worker = skynet.newservice("worker","xuchao",1)
     skynet.name("worker",worker)
     -- 启动买猫粮服务
-    local buy1 = skynet.newservice("buy","buy",1)
+    -- local buy1 = skynet.newservice("buy","buy",1)
 
     -- 开始工作
     skynet.send(worker,"lua","start_work")
@@ -18,7 +18,7 @@ skynet.start(function()
     skynet.send(worker,"lua","stop_work")
 
     -- 买猫粮
-    skynet.send(buy,"lua","buy")
+    -- skynet.send(buy,"lua","buy")
 
     skynet.exit()
 end)
