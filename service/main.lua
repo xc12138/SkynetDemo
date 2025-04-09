@@ -18,7 +18,7 @@ skynet.start(function()
     skynet.send(worker,"lua","stop_work")
 
     -- 买猫粮
-    skynet.send(buy,"lua","buy")
+    skynet.send(buy1,"lua","buy")
 
     skynet.exit()
 end)
