@@ -20,7 +20,7 @@ service.time = function()
     local frame = 0
     while true do
         frame = frame + 1
-        local isok,err = pcall(update,frame)
+        local isok,err = pcall(service.update,frame)
         if not isok then
             skynet.error(err)
         end
