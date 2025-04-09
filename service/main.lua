@@ -1,10 +1,12 @@
 local skynet = require "skynet"
+require "skynet.manager"
 
 skynet.start(function()
     skynet.error("[start main] hello world")
 
     -- 启动打工服务
     local worker = skynet.newservice("worker","xuchao",1)
+    skynet.name("worker",worker)
     -- 启动买猫粮服务
     local buy1 = skynet.newservice("buy","buy",1)
 
