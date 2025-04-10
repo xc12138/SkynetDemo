@@ -8,29 +8,15 @@ proto.c2s = sprotoparser.parse [[
 	session 1 : integer
 }
 
-handshake 1 {
-	response {
-		msg 0  : string
-	}
-}
-
-get 2 {
+sayhello 1 {
 	request {
 		what 0 : string
 	}
 	response {
-		result 0 : string
+		error_code 0 : integer 
+		msg 1 : string
 	}
 }
-
-set 3 {
-	request {
-		what 0 : string
-		value 1 : string
-	}
-}
-
-quit 4 {}
 
 ]]
 
@@ -40,7 +26,7 @@ proto.s2c = sprotoparser.parse [[
 	session 1 : integer
 }
 
-heartbeat 1 {}
+heartbeat 2 {}
 ]]
 
 return proto
