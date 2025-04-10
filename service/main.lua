@@ -1,5 +1,8 @@
 local skynet = require "skynet"
-require "skynet.manager"
+-- require "skynet.manager"
+local sprotoloader = require "sprotoloader"
+
+local max_client = 64
 
 skynet.start(function()
     -- skynet.error("[start main] hello world")

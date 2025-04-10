@@ -1,9 +1,5 @@
-lualoader = "./skynet/lualib/loader.lua"
-luaservice = "./service/?.lua;" .. "./service/?/init.lua;" .. "./skynet/service/?.lua;"
-lua_path = "./etc/?.lua;" .. "./lualib/?.lua;" .. "./skynet/lualib/?.lua;" .. "./skynet/lualib/?/init.lua;"
-lua_cpath = "./luaclib/?.so;" .. "./skynet/luaclib/?.so"
-
 thread = 8
+cpath = "./skynet/cservice/?.so"
 logger = nil
 logpath = "."
 harbor = 0
@@ -12,4 +8,9 @@ master = "127.0.0.1:2013"
 start = "main"
 bootstrap = "snlua bootstrap"
 standalone = "0.0.0.0:2013"
-cpath = "./skynet/cservice/?.so"
+
+lualoader = "./skynet/lualib/loader.lua"
+luaservice = "./service/?.lua;" .. "./service/?/init.lua;" .. "./skynet/service/?.lua;"
+lua_path = "./etc/?.lua;" .. "./lualib/?.lua;" .. "./skynet/lualib/?.lua;" .. "./skynet/lualib/?/init.lua;"
+lua_cpath = "./luaclib/?.so;" .. "./skynet/luaclib/?.so"
+
