@@ -40,7 +40,7 @@ struct node {
 
 struct state {
 	int dirty;
-	ATOM_INT ref;
+	int ref;
 	struct table * root;
 };
 
@@ -253,7 +253,6 @@ fillcolliding(lua_State *L, struct context *ctx) {
 				for (i=emptyslot;i<sizehash;i++) {
 					if (tbl->hash[i].valuetype == VALUETYPE_NIL) {
 						n = &tbl->hash[i];
-						emptyslot = i + 1;
 						break;
 					}
 				}
@@ -306,7 +305,6 @@ convtable(lua_State *L) {
 		for (i=0;i<sizehash;i++) {
 			tbl->hash[i].valuetype = VALUETYPE_NIL;
 			tbl->hash[i].nocolliding = 0;
-			tbl->hash[i].next = -1;
 		}
 		tbl->sizehash = sizehash;
 
@@ -382,9 +380,9 @@ convert_stringmap(struct context *ctx, struct table *tbl) {
 	lua_checkstack(L, ctx->string_index + LUA_MINSTACK);
 	lua_settop(L, ctx->string_index + 1);
 	lua_pushvalue(L, 1);
-	struct state * s = lua_newuserdatauv(L, sizeof(*s), 1);
+	struct state * s = lua_newuserdata(L, sizeof(*s));
 	s->dirty = 0;
-	ATOM_INIT(&s->ref , 0);
+	s->ref = 0;
 	s->root = tbl;
 	lua_replace(L, 1);
 	lua_replace(L, -2);
@@ -540,9 +538,7 @@ lindexconf(lua_State *L) {
 	int keytype;
 	size_t sz = 0;
 	const char * str = NULL;
-	if (kt == LUA_TNIL) {
-		return 0;
-	} else if (kt == LUA_TNUMBER) {
+	if (kt == LUA_TNUMBER) {
 		if (!lua_isinteger(L, 2)) {
 			return luaL_error(L, "Invalid key %f", lua_tonumber(L, 2));
 		}
@@ -668,7 +664,7 @@ releaseobj(lua_State *L) {
 	struct ctrl *c = lua_touserdata(L, 1);
 	struct table *tbl = c->root;
 	struct state *s = lua_touserdata(tbl->L, 1);
-	ATOM_FDEC(&s->ref);
+	ATOM_DEC(&s->ref);
 	c->root = NULL;
 	c->update = NULL;
 
@@ -679,9 +675,9 @@ static int
 lboxconf(lua_State *L) {
 	struct table * tbl = get_table(L,1);	
 	struct state * s = lua_touserdata(tbl->L, 1);
-	ATOM_FINC(&s->ref);
+	ATOM_INC(&s->ref);
 
-	struct ctrl * c = lua_newuserdatauv(L, sizeof(*c), 1);
+	struct ctrl * c = lua_newuserdata(L, sizeof(*c));
 	c->root = tbl;
 	c->update = NULL;
 	if (luaL_newmetatable(L, "confctrl")) {
@@ -715,7 +711,7 @@ static int
 lgetref(lua_State *L) {
 	struct table *tbl = get_table(L,1);
 	struct state * s = lua_touserdata(tbl->L, 1);
-	lua_pushinteger(L , ATOM_LOAD(&s->ref));
+	lua_pushinteger(L , s->ref);
 
 	return 1;
 }
@@ -724,7 +720,7 @@ static int
 lincref(lua_State *L) {
 	struct table *tbl = get_table(L,1);
 	struct state * s = lua_touserdata(tbl->L, 1);
-	int ref = ATOM_FINC(&s->ref)+1;
+	int ref = ATOM_INC(&s->ref);
 	lua_pushinteger(L , ref);
 
 	return 1;
@@ -734,7 +730,7 @@ static int
 ldecref(lua_State *L) {
 	struct table *tbl = get_table(L,1);
 	struct state * s = lua_touserdata(tbl->L, 1);
-	int ref = ATOM_FDEC(&s->ref)-1;
+	int ref = ATOM_DEC(&s->ref);
 	lua_pushinteger(L , ref);
 
 	return 1;
@@ -745,7 +741,7 @@ lneedupdate(lua_State *L) {
 	struct ctrl * c = lua_touserdata(L, 1);
 	if (c->update) {
 		lua_pushlightuserdata(L, c->update);
-		lua_getiuservalue(L, 1, 1);
+		lua_getuservalue(L, 1);
 		return 2;
 	}
 	return 0;
@@ -762,7 +758,7 @@ lupdate(lua_State *L) {
 		return luaL_error(L, "You should update a new object");
 	}
 	lua_settop(L, 3);
-	lua_setiuservalue(L, 1, 1);
+	lua_setuservalue(L, 1);
 	c->update = n;
 
 	return 0;

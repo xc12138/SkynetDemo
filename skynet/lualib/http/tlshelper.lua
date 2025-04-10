@@ -6,8 +6,7 @@ local tlshelper = {}
 function tlshelper.init_requestfunc(fd, tls_ctx)
     local readfunc = socket.readfunc(fd)
     local writefunc = socket.writefunc(fd)
-    return function (hostname)
-        tls_ctx:set_ext_host_name(hostname)
+    return function ()
         local ds1 = tls_ctx:handshake()
         writefunc(ds1)
         while not tls_ctx:finished() do
@@ -44,16 +43,13 @@ function tlshelper.closefunc(tls_ctx)
 end
 
 function tlshelper.readfunc(fd, tls_ctx)
-    local function readfunc()
-        readfunc = socket.readfunc(fd)
-        return ""
-    end
+    local readfunc = socket.readfunc(fd)
     local read_buff = ""
     return function (sz)
         if not sz then
             local s = ""
             if #read_buff == 0 then
-                local ds = readfunc()
+                local ds = readfunc(sz)
                 s = tls_ctx:read(ds)
             end
             s = read_buff .. s
@@ -81,6 +77,7 @@ function tlshelper.writefunc(fd, tls_ctx)
 end
 
 function tlshelper.readallfunc(fd, tls_ctx)
+    local readfunc = socket.readfunc(fd)
     return function ()
         local ds = socket.readall(fd)
         local s = tls_ctx:read(ds)
@@ -92,8 +89,8 @@ function tlshelper.newctx()
     return c.newctx()
 end
 
-function tlshelper.newtls(method, ssl_ctx, hostname)
-    return c.newtls(method, ssl_ctx, hostname)
+function tlshelper.newtls(method, ssl_ctx)
+    return c.newtls(method, ssl_ctx)
 end
 
 return tlshelper

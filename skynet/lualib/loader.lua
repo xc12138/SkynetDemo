@@ -25,8 +25,8 @@ if not main then
 end
 
 LUA_SERVICE = nil
-package.path , LUA_PATH = LUA_PATH, nil
-package.cpath , LUA_CPATH = LUA_CPATH, nil
+package.path , LUA_PATH = LUA_PATH
+package.cpath , LUA_CPATH = LUA_CPATH
 
 local service_path = string.match(pattern, "(.*/)[^/?]+$")
 
@@ -44,7 +44,5 @@ if LUA_PRELOAD then
 	f(table.unpack(args))
 	LUA_PRELOAD = nil
 end
-
-_G.require = (require "skynet.require").require
 
 main(select(2, table.unpack(args)))

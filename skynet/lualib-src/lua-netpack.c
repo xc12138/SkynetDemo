@@ -22,7 +22,6 @@
 #define TYPE_OPEN 4
 #define TYPE_CLOSE 5
 #define TYPE_WARNING 6
-#define TYPE_INIT 7
 
 /*
 	Each package is uint16 + data , uint16 (serialized in big-endian) is the number of bytes comprising the data .
@@ -118,7 +117,7 @@ static struct queue *
 get_queue(lua_State *L) {
 	struct queue *q = lua_touserdata(L,1);
 	if (q == NULL) {
-		q = lua_newuserdatauv(L, sizeof(struct queue), 0);
+		q = lua_newuserdata(L, sizeof(struct queue));
 		q->cap = QUEUESIZE;
 		q->head = 0;
 		q->tail = 0;
@@ -133,7 +132,7 @@ get_queue(lua_State *L) {
 
 static void
 expand_queue(lua_State *L, struct queue *q) {
-	struct queue *nq = lua_newuserdatauv(L, sizeof(struct queue) + q->cap * sizeof(struct netpack), 0);
+	struct queue *nq = lua_newuserdata(L, sizeof(struct queue) + q->cap * sizeof(struct netpack));
 	nq->cap = q->cap + QUEUESIZE;
 	nq->head = 0;
 	nq->tail = q->cap;
@@ -355,11 +354,8 @@ lfilter(lua_State *L) {
 		assert(size == -1);	// never padding string
 		return filter_data(L, message->id, (uint8_t *)buffer, message->ud);
 	case SKYNET_SOCKET_TYPE_CONNECT:
-		lua_pushvalue(L, lua_upvalueindex(TYPE_INIT));
-		lua_pushinteger(L, message->id);
-		lua_pushlstring(L, buffer, size);
-		lua_pushinteger(L, message->ud);
-		return 5;
+		// ignore listen fd connect
+		return 1;
 	case SKYNET_SOCKET_TYPE_CLOSE:
 		// no more data in fd (message->id)
 		close_uncomplete(L, message->id);
@@ -487,9 +483,8 @@ luaopen_skynet_netpack(lua_State *L) {
 	lua_pushliteral(L, "open");
 	lua_pushliteral(L, "close");
 	lua_pushliteral(L, "warning");
-	lua_pushliteral(L, "init");
 
-	lua_pushcclosure(L, lfilter, 7);
+	lua_pushcclosure(L, lfilter, 6);
 	lua_setfield(L, -2, "filter");
 
 	return 1;

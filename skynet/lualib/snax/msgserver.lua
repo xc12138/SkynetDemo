@@ -100,10 +100,8 @@ function server.logout(username)
 	local u = user_online[username]
 	user_online[username] = nil
 	if u.fd then
-		if connection[u.fd] then
-			gateserver.closeclient(u.fd)
-			connection[u.fd] = nil
-		end
+		gateserver.closeclient(u.fd)
+		connection[u.fd] = nil
 	end
 end
 
@@ -155,14 +153,10 @@ function server.start(conf)
 		handshake[fd] = nil
 		local c = connection[fd]
 		if c then
+			c.fd = nil
+			connection[fd] = nil
 			if conf.disconnect_handler then
 				conf.disconnect_handler(c.username)
-			end
-			-- double check, conf.disconnect_handler may close fd
-			if connection[fd] then
-				c.fd = nil
-				connection[fd] = nil
-				gateserver.closeclient(fd)
 			end
 		end
 	end
@@ -262,7 +256,7 @@ function server.start(conf)
 		if p == nil then
 			p = { fd }
 			u.response[session] = p
-			local ok, result = pcall(request_handler, u.username, message)
+			local ok, result = pcall(conf.request_handler, u.username, message)
 			-- NOTICE: YIELD here, socket may close.
 			result = result or ""
 			if not ok then

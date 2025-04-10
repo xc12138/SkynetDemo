@@ -1,7 +1,4 @@
---
--- Copyright 2007-2023, Lua.org & PUC-Rio  (see 'lpeg.html' for license)
--- written by Roberto Ierusalimschy
---
+-- $Id: re.lua,v 1.44 2013/03/26 20:11:40 roberto Exp $
 
 -- imported functions and modules
 local tonumber, type, print, error = tonumber, type, print, error
@@ -13,14 +10,14 @@ local m = require"lpeg"
 -- on 'mm'
 local mm = m
 
--- patterns' metatable
+-- pattern's metatable
 local mt = getmetatable(mm.P(0))
 
 
-local version = _VERSION
 
 -- No more global accesses after this point
-_ENV = nil     -- does no harm in Lua 5.1
+local version = _VERSION
+if version == "Lua 5.2" then _ENV = nil end
 
 
 local any = m.P(1)
@@ -74,6 +71,13 @@ updatelocale()
 local I = m.P(function (s,i) print(i, s:sub(1, i-1)); return i end)
 
 
+local function getdef (id, defs)
+  local c = defs and defs[id]
+  if not c then error("undefined name: " .. id) end
+  return c
+end
+
+
 local function patt_error (s, i)
   local msg = (#s < i + 20) and s:sub(i)
                              or s:sub(i,i+20) .. "..."
@@ -112,20 +116,6 @@ name = m.C(name)
 -- a defined name only have meaning in a given environment
 local Def = name * m.Carg(1)
 
-
-local function getdef (id, defs)
-  local c = defs and defs[id]
-  if not c then error("undefined name: " .. id) end
-  return c
-end
-
--- match a name and return a group of its corresponding definition
--- and 'f' (to be folded in 'Suffix')
-local function defwithfunc (f)
-  return m.Cg(Def / getdef * m.Cc(f))
-end
-
-
 local num = m.C(m.R"09"^1) * S / tonumber
 
 local String = "'" * m.C((any - "'")^0) * "'" +
@@ -140,12 +130,12 @@ end
 
 local Range = m.Cs(any * (m.P"-"/"") * (any - "]")) / mm.R
 
-local item = (defined + Range + m.C(any)) / m.P
+local item = defined + Range + m.C(any)
 
 local Class =
     "["
   * (m.C(m.P"^"^-1))    -- optional complement symbol
-  * (item * ((item % mt.__add) - "]")^0) /
+  * m.Cf(item * (item - "]")^0, mt.__add) /
                           function (c, p) return c == "^" and any - p or p end
   * "]"
 
@@ -171,13 +161,13 @@ end
 
 local exp = m.P{ "Exp",
   Exp = S * ( m.V"Grammar"
-            + m.V"Seq" * ("/" * S * m.V"Seq" % mt.__add)^0 );
-  Seq = (m.Cc(m.P"") * (m.V"Prefix" % mt.__mul)^0)
+            + m.Cf(m.V"Seq" * ("/" * S * m.V"Seq")^0, mt.__add) );
+  Seq = m.Cf(m.Cc(m.P"") * m.V"Prefix"^0 , mt.__mul)
         * (#seq_follow + patt_error);
   Prefix = "&" * S * m.V"Prefix" / mt.__len
          + "!" * S * m.V"Prefix" / mt.__unm
          + m.V"Suffix";
-  Suffix = m.V"Primary" * S *
+  Suffix = m.Cf(m.V"Primary" * S *
           ( ( m.P"+" * m.Cc(1, mt.__pow)
             + m.P"*" * m.Cc(0, mt.__pow)
             + m.P"?" * m.Cc(-1, mt.__pow)
@@ -186,13 +176,11 @@ local exp = m.P{ "Exp",
                     )
             + "->" * S * ( m.Cg((String + num) * m.Cc(mt.__div))
                          + m.P"{}" * m.Cc(nil, m.Ct)
-                         + defwithfunc(mt.__div)
+                         + m.Cg(Def / getdef * m.Cc(mt.__div))
                          )
-            + "=>" * S * defwithfunc(mm.Cmt)
-            + ">>" * S * defwithfunc(mt.__mod)
-            + "~>" * S * defwithfunc(mm.Cf)
-            ) % function (a,b,f) return f(a,b) end * S
-          )^0;
+            + "=>" * S * m.Cg(Def / getdef * m.Cc(m.Cmt))
+            ) * S
+          )^0, function (a,b,f) return f(a,b) end );
   Primary = "(" * m.V"Exp" * ")"
             + String / mm.P
             + Class
@@ -208,7 +196,8 @@ local exp = m.P{ "Exp",
             + (name * -arrow + "<" * name * ">") * m.Cb("G") / NT;
   Definition = name * arrow * m.V"Exp";
   Grammar = m.Cg(m.Cc(true), "G") *
-            ((m.V"Definition" / firstdef) * (m.V"Definition" % adddef)^0) / mm.P
+            m.Cf(m.V"Definition" / firstdef * m.Cg(m.V"Definition")^0,
+              adddef) / mm.P
 }
 
 local pattern = S * m.Cg(m.Cc(false), "G") * exp / mm.P * (-any + patt_error)

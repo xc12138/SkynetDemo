@@ -1,4 +1,5 @@
 local skynet = require "skynet"
+local sc = require "skynet.socketchannel"
 local socket = require "skynet.socket"
 local cluster = require "skynet.cluster.core"
 local ignoreret = skynet.ignoreret
@@ -10,23 +11,21 @@ fd = tonumber(fd)
 
 local large_request = {}
 local inquery_name = {}
-local register_name
 
 local register_name_mt = { __index =
 	function(self, name)
 		local waitco = inquery_name[name]
 		if waitco then
-			local co = coroutine.running()
+			local co=coroutine.running()
 			table.insert(waitco, co)
 			skynet.wait(co)
-			return rawget(register_name, name)
+			return rawget(self, name)
 		else
 			waitco = {}
 			inquery_name[name] = waitco
-
 			local addr = skynet.call(clusterd, "lua", "queryname", name:sub(2))	-- name must be '@xxxx'
 			if addr then
-				register_name[name] = addr
+				self[name] = addr
 			end
 			inquery_name[name] = nil
 			for _, co in ipairs(waitco) do
@@ -38,9 +37,10 @@ local register_name_mt = { __index =
 }
 
 local function new_register_name()
-	register_name = setmetatable({}, register_name_mt)
+	return setmetatable({}, register_name_mt)
 end
-new_register_name()
+
+local register_name = new_register_name()
 
 local tracetag
 
@@ -81,12 +81,11 @@ local function dispatch_request(_,_,addr, session, msg, sz, padding, is_push)
 		local addr = register_name["@" .. name]
 		if addr then
 			ok = true
-			msg = skynet.packstring(addr)
+			msg, sz = skynet.pack(addr)
 		else
 			ok = false
 			msg = "name not found"
 		end
-		sz = nil
 	else
 		if cluster.isname(addr) then
 			addr = register_name[addr]
@@ -131,15 +130,14 @@ skynet.start(function()
 		dispatch = dispatch_request,
 	}
 	-- fd can write, but don't read fd, the data package will forward from gate though client protocol.
-	-- forward may fail, see https://github.com/cloudwu/skynet/issues/1958
-	pcall(skynet.call,gate, "lua", "forward", fd)
+	skynet.call(gate, "lua", "forward", fd)
 
 	skynet.dispatch("lua", function(_,source, cmd, ...)
 		if cmd == "exit" then
-			socket.close_fd(fd)
+			socket.close(fd)
 			skynet.exit()
 		elseif cmd == "namechange" then
-			new_register_name()
+			register_name = new_register_name()
 		else
 			skynet.error(string.format("Invalid command %s from %s", cmd, skynet.address(source)))
 		end

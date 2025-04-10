@@ -71,8 +71,7 @@ local function dispatch_subscribe(channel, source, pack, msg, sz)
 	local self = dispatch[channel]
 	if not self then
 		mc.close(pack)
-		-- This channel may unsubscribe first, see #1141
-		return
+		error ("Unknown channel " .. channel)
 	end
 
 	if self.__subscribe then
@@ -95,6 +94,6 @@ local function init()
 	}
 end
 
-skynet.init(init)
+skynet.init(init, "multicast")
 
 return multicast

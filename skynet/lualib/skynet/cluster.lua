@@ -5,10 +5,6 @@ local cluster = {}
 local sender = {}
 local task_queue = {}
 
-local function repack(address, ...)
-	return address, skynet.pack(...)
-end
-
 local function request_sender(q, node)
 	local ok, c = pcall(skynet.call, clusterd, "lua", "sender", node)
 	if not ok then
@@ -20,9 +16,9 @@ local function request_sender(q, node)
 	q.confirm = confirm
 	q.sender = c
 	for _, task in ipairs(q) do
-		if type(task) == "string" then
+		if type(task) == "table" then
 			if c then
-				skynet.send(c, "lua", "push", repack(skynet.unpack(task)))
+				skynet.send(c, "lua", "push", task[1], skynet.pack(table.unpack(task,2,task.n)))
 			end
 		else
 			skynet.wakeup(task)
@@ -55,33 +51,26 @@ local function get_sender(node)
 	return s
 end
 
-cluster.get_sender = get_sender
-
 function cluster.call(node, address, ...)
 	-- skynet.pack(...) will free by cluster.core.packrequest
-	local s = sender[node]
-	if not s then
-		local task = skynet.packstring(address, ...)
-		return skynet.call(get_sender(node), "lua", "req", repack(skynet.unpack(task)))
-	end
-	return skynet.call(s, "lua", "req", address, skynet.pack(...))
+	return skynet.call(get_sender(node), "lua", "req",  address, skynet.pack(...))
 end
 
 function cluster.send(node, address, ...)
 	-- push is the same with req, but no response
 	local s = sender[node]
 	if not s then
-		table.insert(task_queue[node], skynet.packstring(address, ...))
+		table.insert(task_queue[node], table.pack(address, ...))
 	else
 		skynet.send(sender[node], "lua", "push", address, skynet.pack(...))
 	end
 end
 
-function cluster.open(port, maxclient)
+function cluster.open(port)
 	if type(port) == "string" then
-		return skynet.call(clusterd, "lua", "listen", port, nil, maxclient)
+		skynet.call(clusterd, "lua", "listen", port)
 	else
-		return skynet.call(clusterd, "lua", "listen", "0.0.0.0", port, maxclient)
+		skynet.call(clusterd, "lua", "listen", "0.0.0.0", port)
 	end
 end
 
@@ -106,11 +95,6 @@ function cluster.register(name, addr)
 	assert(type(name) == "string")
 	assert(addr == nil or type(addr) == "number")
 	return skynet.call(clusterd, "lua", "register", name, addr)
-end
-
-function cluster.unregister(name)
-	assert(type(name) == "string")
-	return skynet.call(clusterd, "lua", "unregister", name)
 end
 
 function cluster.query(node, name)

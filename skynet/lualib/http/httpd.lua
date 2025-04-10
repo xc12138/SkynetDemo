@@ -1,12 +1,8 @@
 local internal = require "http.internal"
 
+local table = table
 local string = string
 local type = type
-local assert = assert
-local tonumber = tonumber
-local pcall = pcall
-local ipairs = ipairs
-local pairs = pairs
 
 local httpd = {}
 

@@ -6,6 +6,7 @@
 
 #include "sproto.h"
 
+#define SPROTO_TARRAY 0x80
 #define CHUNK_SIZE 1000
 #define SIZEOF_LENGTH 4
 #define SIZEOF_HEADER 2
@@ -19,7 +20,6 @@ struct field {
 	const char * name;
 	struct sproto_type * st;
 	int key;
-	int map; // interpreted two fields struct as map
 	int extra;
 };
 
@@ -206,7 +206,6 @@ import_field(struct sproto *s, struct field *f, const uint8_t * stream) {
 	f->name = NULL;
 	f->st = NULL;
 	f->key = -1;
-	f->map = -1;
 	f->extra = 0;
 
 	sz = todword(stream);
@@ -263,10 +262,6 @@ import_field(struct sproto *s, struct field *f, const uint8_t * stream) {
 		case 5:	// key
 			f->key = value;
 			break;
-		case 6: // map
-			if (value)
-				f->map = 1;
-			break;
 		default:
 			return NULL;
 		}
@@ -286,8 +281,6 @@ import_field(struct sproto *s, struct field *f, const uint8_t * stream) {
 		type 2 : integer
 		tag 3 : integer
 		array 4 : boolean
-		key 5 : integer
-		map 6 : boolean // Interpreted two fields struct as map when decoding
 	}
 	name 0 : string
 	fields 1 : *field
@@ -494,32 +487,6 @@ sproto_release(struct sproto * s) {
 	pool_release(&s->memory);
 }
 
-static const char *
-get_typename(int type, struct field *f) {
-	if (type == SPROTO_TSTRUCT) {
-		return f->st->name;
-	} else {
-		switch (type) {
-		case SPROTO_TINTEGER:
-			if (f->extra)
-				return "decimal";
-			else
-				return "integer";
-		case SPROTO_TBOOLEAN:
-			return "boolean";
-		case SPROTO_TSTRING:
-			if (f->extra == SPROTO_TSTRING_BINARY)
-				return "binary";
-			else
-				return "string";
-		case SPROTO_TDOUBLE:
-			return "double";
-		default:
-			return "invalid";
-		}
-	}
-}
-
 void
 sproto_dump(struct sproto *s) {
 	int i,j;
@@ -528,30 +495,50 @@ sproto_dump(struct sproto *s) {
 		struct sproto_type *t = &s->type[i];
 		printf("%s\n", t->name);
 		for (j=0;j<t->n;j++) {
-			char container[2] = { 0, 0 };
-			const char * typename = NULL;
+			char array[2] = { 0, 0 };
+			const char * type_name = NULL;
 			struct field *f = &t->f[j];
 			int type = f->type & ~SPROTO_TARRAY;
 			if (f->type & SPROTO_TARRAY) {
-				container[0] = '*';
+				array[0] = '*';
 			} else {
-				container[0] = 0;
+				array[0] = 0;
 			}
-			typename = get_typename(type, f);
-			printf("\t%s (%d) %s%s", f->name, f->tag, container, typename);
+			if (type == SPROTO_TSTRUCT) {
+				type_name = f->st->name;
+			} else {
+				switch(type) {
+				case SPROTO_TINTEGER:
+					if (f->extra) {
+						type_name = "decimal";
+					} else {
+						type_name = "integer";
+					}
+					break;
+				case SPROTO_TBOOLEAN:
+					type_name = "boolean";
+					break;
+				case SPROTO_TSTRING:
+					if (f->extra == SPROTO_TSTRING_BINARY)
+						type_name = "binary";
+					else
+						type_name = "string";
+					break;
+				default:
+					type_name = "invalid";
+					break;
+				}
+			}
+			printf("\t%s (%d) %s%s", f->name, f->tag, array, type_name);
 			if (type == SPROTO_TINTEGER && f->extra > 0) {
 				printf("(%d)", f->extra);
 			}
 			if (f->key >= 0) {
-				printf(" key[%d]", f->key);
-				if (f->map >= 0) {
-					printf(" value[%d]", f->st->f[1].tag);
-				}
+				printf("[%d]", f->key);
 			}
 			printf("\n");
 		}
 	}
-
 	printf("=== %d protocol ===\n", s->protocol_n);
 	for (i=0;i<s->protocol_n;i++) {
 		struct protocol *p = &s->proto[i];
@@ -853,36 +840,6 @@ encode_integer_array(sproto_callback cb, struct sproto_arg *args, uint8_t *buffe
 	return buffer;
 }
 
-static uint8_t *
-encode_array_object(sproto_callback cb, struct sproto_arg *args, uint8_t *buffer, int size, int *noarray) {
-	int sz;
-	*noarray = 0;
-	args->index = 1;
-	for (;;) {
-		if (size < SIZEOF_LENGTH)
-			return NULL;
-		size -= SIZEOF_LENGTH;
-		args->value = buffer + SIZEOF_LENGTH;
-		args->length = size;
-		sz = cb(args);
-		if (sz < 0) {
-			if (sz == SPROTO_CB_NIL) {
-				break;
-			}
-			if (sz == SPROTO_CB_NOARRAY) {	// no array, don't encode it
-				*noarray = 1;
-				break;
-			}
-			return NULL;	// sz == SPROTO_CB_ERROR
-		}
-		fill_size(buffer, sz);
-		buffer += SIZEOF_LENGTH+sz;
-		size -= sz;
-		++args->index;
-	}
-	return buffer;
-}
-
 static int
 encode_array(sproto_callback cb, struct sproto_arg *args, uint8_t *data, int size) {
 	uint8_t * buffer;
@@ -892,13 +849,12 @@ encode_array(sproto_callback cb, struct sproto_arg *args, uint8_t *data, int siz
 	size -= SIZEOF_LENGTH;
 	buffer = data + SIZEOF_LENGTH;
 	switch (args->type) {
-	case SPROTO_TDOUBLE:
 	case SPROTO_TINTEGER: {
 		int noarray;
 		buffer = encode_integer_array(cb,args,buffer,size, &noarray);
 		if (buffer == NULL)
 			return -1;
-
+	
 		if (noarray) {
 			return 0;
 		}
@@ -926,15 +882,29 @@ encode_array(sproto_callback cb, struct sproto_arg *args, uint8_t *data, int siz
 			++args->index;
 		}
 		break;
-	default: {
-		int noarray;
-		buffer = encode_array_object(cb, args, buffer, size, &noarray);
-		if (buffer == NULL)
-			return -1;
-		if (noarray)
-			return 0;
+	default:
+		args->index = 1;
+		for (;;) {
+			if (size < SIZEOF_LENGTH)
+				return -1;
+			size -= SIZEOF_LENGTH;
+			args->value = buffer+SIZEOF_LENGTH;
+			args->length = size;
+			sz = cb(args);
+			if (sz < 0) {
+				if (sz == SPROTO_CB_NIL) {
+					break;
+				}
+				if (sz == SPROTO_CB_NOARRAY)	// no array, don't encode it
+					return 0;
+				return -1;	// sz == SPROTO_CB_ERROR
+			}
+			fill_size(buffer, sz);
+			buffer += SIZEOF_LENGTH+sz;
+			size -=sz;
+			++args->index;
+		}
 		break;
-	}
 	}
 	sz = buffer - (data + SIZEOF_LENGTH);
 	return fill_size(data, sz);
@@ -967,20 +937,13 @@ sproto_encode(const struct sproto_type *st, void * buffer, int size, sproto_call
 		args.subtype = f->st;
 		args.mainindex = f->key;
 		args.extra = f->extra;
-		args.ktagname = NULL;
-		args.vtagname = NULL;
 		if (type & SPROTO_TARRAY) {
-			args.type = type & (~SPROTO_TARRAY);
-			if (f->map > 0) {
-				args.ktagname = f->st->f[0].name;
-				args.vtagname = f->st->f[1].name;
-			}
+			args.type = type & ~SPROTO_TARRAY;
 			sz = encode_array(cb, &args, data, size);
 		} else {
 			args.type = type;
 			args.index = 0;
 			switch(type) {
-			case SPROTO_TDOUBLE:
 			case SPROTO_TINTEGER:
 			case SPROTO_TBOOLEAN: {
 				union {
@@ -1089,32 +1052,24 @@ expand64(uint32_t v) {
 }
 
 static int
-decode_empty_array(sproto_callback cb, struct sproto_arg *args) {
-	// It's empty array, call cb with index == -1 to create the empty array.
-	args->index = -1;
-	args->value = NULL;
-	args->length = 0;
-	return cb(args);
-}
-
-static int
 decode_array(sproto_callback cb, struct sproto_arg *args, uint8_t * stream) {
 	uint32_t sz = todword(stream);
 	int type = args->type;
 	int i;
 	if (sz == 0) {
-		return decode_empty_array(cb, args);
-	}
+		// It's empty array, call cb with index == -1 to create the empty array.
+		args->index = -1;
+		args->value = NULL;
+		args->length = 0;
+		cb(args);
+		return 0;
+	}	
 	stream += SIZEOF_LENGTH;
 	switch (type) {
-	case SPROTO_TDOUBLE:
 	case SPROTO_TINTEGER: {
-		if (--sz == 0) {
-			// An empty array but with a len prefix
-			return decode_empty_array(cb, args);
-		}
 		int len = *stream;
 		++stream;
+		--sz;
 		if (len == SIZEOF_INT32) {
 			if (sz % SIZEOF_INT32 != 0)
 				return -1;
@@ -1210,26 +1165,18 @@ sproto_decode(const struct sproto_type *st, const void * data, int size, sproto_
 			continue;
 		args.tagname = f->name;
 		args.tagid = f->tag;
-		args.type = f->type;
+		args.type = f->type & ~SPROTO_TARRAY;
 		args.subtype = f->st;
 		args.index = 0;
 		args.mainindex = f->key;
 		args.extra = f->extra;
-		args.ktagname = NULL;
-		args.vtagname = NULL;
 		if (value < 0) {
 			if (f->type & SPROTO_TARRAY) {
-				args.type = f->type & (~SPROTO_TARRAY);
-				if (f->map > 0) {
-					args.ktagname = f->st->f[0].name;
-					args.vtagname = f->st->f[1].name;
-				}
 				if (decode_array(cb, &args, currentdata)) {
 					return -1;
 				}
 			} else {
 				switch (f->type) {
-				case SPROTO_TDOUBLE:
 				case SPROTO_TINTEGER: {
 					uint32_t sz = todword(currentdata);
 					if (sz == SIZEOF_INT32) {
@@ -1315,15 +1262,15 @@ pack_seg(const uint8_t *src, uint8_t * buffer, int sz, int n) {
 }
 
 static inline void
-write_ff(const uint8_t * src, const uint8_t * src_end, uint8_t * des, int n) {
+write_ff(const uint8_t * src, uint8_t * des, int n) {
+	int i;
+	int align8_n = (n+7)&(~7);
+
 	des[0] = 0xff;
-	des[1] = n - 1;
-	if (src + n * 8 <= src_end) {
-		memcpy(des+2, src, n*8);
-	} else {
-		int sz = (int)(src_end - src);
-		memcpy(des+2, src, sz);
-		memset(des+2+sz, 0, n*8-sz);
+	des[1] = align8_n/8 - 1;
+	memcpy(des+2, src, n);
+	for(i=0; i< align8_n-n; i++){
+		des[n+2+i] = 0;
 	}
 }
 
@@ -1336,7 +1283,6 @@ sproto_pack(const void * srcv, int srcsz, void * bufferv, int bufsz) {
 	int ff_n = 0;
 	int size = 0;
 	const uint8_t * src = srcv;
-	const uint8_t * src_end = (uint8_t *)srcv + srcsz;
 	uint8_t * buffer = bufferv;
 	for (i=0;i<srcsz;i+=8) {
 		int n;
@@ -1360,14 +1306,14 @@ sproto_pack(const void * srcv, int srcsz, void * bufferv, int bufsz) {
 			++ff_n;
 			if (ff_n == 256) {
 				if (bufsz >= 0) {
-					write_ff(ff_srcstart, src_end, ff_desstart, 256);
+					write_ff(ff_srcstart, ff_desstart, 256*8);
 				}
 				ff_n = 0;
 			}
 		} else {
 			if (ff_n > 0) {
 				if (bufsz >= 0) {
-					write_ff(ff_srcstart, src_end, ff_desstart, ff_n);
+					write_ff(ff_srcstart, ff_desstart, ff_n*8);
 				}
 				ff_n = 0;
 			}
@@ -1376,8 +1322,11 @@ sproto_pack(const void * srcv, int srcsz, void * bufferv, int bufsz) {
 		buffer += n;
 		size += n;
 	}
-	if(bufsz >= 0 && ff_n > 0) {
-		write_ff(ff_srcstart, src_end, ff_desstart, ff_n);
+	if(bufsz >= 0){
+		if(ff_n == 1)
+			write_ff(ff_srcstart, ff_desstart, 8);
+		else if (ff_n > 1)
+			write_ff(ff_srcstart, ff_desstart, srcsz - (intptr_t)(ff_srcstart - (const uint8_t*)srcv));
 	}
 	return size;
 }
@@ -1393,7 +1342,7 @@ sproto_unpack(const void * srcv, int srcsz, void * bufferv, int bufsz) {
 		++src;
 		if (header == 0xff) {
 			int n;
-			if (srcsz <= 0) {
+			if (srcsz < 0) {
 				return -1;
 			}
 			n = (src[0] + 1) * 8;
@@ -1413,7 +1362,7 @@ sproto_unpack(const void * srcv, int srcsz, void * bufferv, int bufsz) {
 			for (i=0;i<8;i++) {
 				int nz = (header >> i) & 1;
 				if (nz) {
-					if (srcsz <= 0)
+					if (srcsz < 0)
 						return -1;
 					if (bufsz > 0) {
 						*buffer = *src;

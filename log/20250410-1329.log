@@ -1,0 +1,79 @@
+[:01000002] LAUNCH snlua bootstrap
+[:01000003] LAUNCH snlua launcher
+[:01000004] LAUNCH snlua cmaster
+[:01000004] master listen socket 192.168.3.22:2013
+[:01000005] LAUNCH snlua cslave
+[:01000005] slave connect to master 192.168.3.22:2013
+[:01000004] connect from 192.168.3.22:34130 4
+[:01000006] LAUNCH harbor 1 16777221
+[:01000004] Harbor 1 (fd=4) report 192.168.3.22:2526
+[:01000005] Waiting for 0 harbors
+[:01000005] Shakehand ready
+[:01000007] LAUNCH snlua datacenterd
+[:01000008] LAUNCH snlua service_mgr
+[:01000009] LAUNCH snlua main
+[:01000009] Server start
+[:0100000a] LAUNCH snlua protoloader
+[:0100000b] LAUNCH snlua debug_console 8000
+[:0100000b] Start debug console at 127.0.0.1:8000
+[:0100000c] LAUNCH snlua logind
+[:0100000d] LAUNCH snlua logind
+[:0100000e] LAUNCH snlua logind
+[:0100000f] LAUNCH snlua logind
+[:01000010] LAUNCH snlua logind
+[:01000011] LAUNCH snlua logind
+[:01000012] LAUNCH snlua logind
+[:01000013] LAUNCH snlua logind
+[:01000014] LAUNCH snlua logind
+[:0100000c] login server listen at : 0.0.0.0 8001
+[:01000015] LAUNCH snlua gated 16777228 1 1
+[:01000015] Listen on 0.0.0.0:8888
+[:01000016] LAUNCH snlua msgagent
+[:01000016] lua loader error : /home/xuchao/SkynetTest/service/msgagent.lua:5: module 'game.config.ErrorCode' not found:
+	no field package.preload['game.config.ErrorCode']
+	no file '/home/xuchao/SkynetTest/lualib/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/lualib/game/config/ErrorCode/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/skynet/lualib/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/skynet/lualib/game/config/ErrorCode/init.lua'
+	no file '/home/xuchao/SkynetTest/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/game/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/../Lua/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/game/scene/system/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/../Lua/Common/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/lualib/ECS/game/config/ErrorCode.lua'
+	no file '/home/xuchao/SkynetTest/skynet/luaclib/game/config/ErrorCode.so'
+	no file '/home/xuchao/SkynetTest/lualib/ECS/game/config/ErrorCode.so'
+	no file '/home/xuchao/SkynetTest/skynet/luaclib/game.so'
+	no file '/home/xuchao/SkynetTest/lualib/ECS/game.so'
+stack traceback:
+	[C]: in function 'require'
+	/home/xuchao/SkynetTest/service/msgagent.lua:5: in local 'main'
+	/home/xuchao/SkynetTest/skynet/lualib/loader.lua:48: in main chunk
+[:01000016] KILL self
+[:01000015] lua call [1000003 to :1000015 : 3 msgsz = 0] error : [31m/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:616: /home/xuchao/SkynetTest/skynet/lualib/skynet.lua:183: /home/xuchao/SkynetTest/skynet/lualib/skynet.lua:358: call failed
+stack traceback:
+	[C]: in function 'error'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:358: in upvalue 'yield_call'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:375: in function 'skynet.call'
+	(...tail calls...)
+	/home/xuchao/SkynetTest/service/gated.lua:101: in function </home/xuchao/SkynetTest/service/gated.lua:95>
+	(...tail calls...)
+	/home/xuchao/SkynetTest/skynet/lualib/snax/gateserver.lua:149: in upvalue 'f'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:140: in function </home/xuchao/SkynetTest/skynet/lualib/skynet.lua:112>
+stack traceback:
+	[C]: in function 'assert'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:616: in function 'skynet.dispatch_message'[0m
+[:01000009] init service failed: /home/xuchao/SkynetTest/skynet/lualib/skynet.lua:358: call failed
+stack traceback:
+	[C]: in function 'error'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:358: in upvalue 'yield_call'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:375: in function 'skynet.call'
+	/home/xuchao/SkynetTest/service/main.lua:16: in local 'start'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:720: in function </home/xuchao/SkynetTest/skynet/lualib/skynet.lua:717>
+	[C]: in function 'xpcall'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:724: in function 'skynet.pcall'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:728: in function 'skynet.init_service'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:741: in upvalue 'f'
+	/home/xuchao/SkynetTest/skynet/lualib/skynet.lua:113: in function </home/xuchao/SkynetTest/skynet/lualib/skynet.lua:112>
+[:01000009] KILL self
+[:01000002] KILL self

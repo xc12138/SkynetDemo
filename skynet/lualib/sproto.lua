@@ -107,7 +107,6 @@ local function queryproto(self, pname)
 
 	return v
 end
-sproto.queryproto = queryproto
 
 function sproto:exist_proto(pname)
 	local v = self.__pcache[pname]

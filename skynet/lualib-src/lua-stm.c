@@ -13,12 +13,12 @@
 
 struct stm_object {
 	struct rwlock lock;
-	ATOM_INT reference;
+	int reference;
 	struct stm_copy * copy;
 };
 
 struct stm_copy {
-	ATOM_INT reference;
+	int reference;
 	uint32_t sz;
 	void * msg;
 };
@@ -27,7 +27,7 @@ struct stm_copy {
 static struct stm_copy *
 stm_newcopy(void * msg, int32_t sz) {
 	struct stm_copy * copy = skynet_malloc(sizeof(*copy));
-	ATOM_INIT(&copy->reference, 1);
+	copy->reference = 1;
 	copy->sz = sz;
 	copy->msg = msg;
 
@@ -38,7 +38,7 @@ static struct stm_object *
 stm_new(void * msg, int32_t sz) {
 	struct stm_object * obj = skynet_malloc(sizeof(*obj));
 	rwlock_init(&obj->lock);
-	ATOM_INIT(&obj->reference , 1);
+	obj->reference = 1;
 	obj->copy = stm_newcopy(msg, sz);
 
 	return obj;
@@ -48,7 +48,7 @@ static void
 stm_releasecopy(struct stm_copy *copy) {
 	if (copy == NULL)
 		return;
-	if (ATOM_FDEC(&copy->reference) <= 1) {
+	if (ATOM_DEC(&copy->reference) == 0) {
 		skynet_free(copy->msg);
 		skynet_free(copy);
 	}
@@ -61,7 +61,7 @@ stm_release(struct stm_object *obj) {
 	// writer release the stm object, so release the last copy .
 	stm_releasecopy(obj->copy);
 	obj->copy = NULL;
-	if (ATOM_FDEC(&obj->reference) > 1) {
+	if (--obj->reference > 0) {
 		// stm object grab by readers, reset the copy to NULL.
 		rwlock_wunlock(&obj->lock);
 		return;
@@ -73,7 +73,7 @@ stm_release(struct stm_object *obj) {
 static void
 stm_releasereader(struct stm_object *obj) {
 	rwlock_rlock(&obj->lock);
-	if (ATOM_FDEC(&obj->reference) == 1) {
+	if (ATOM_DEC(&obj->reference) == 0) {
 		// last reader, no writer. so no need to unlock
 		assert(obj->copy == NULL);
 		skynet_free(obj);
@@ -140,7 +140,7 @@ lnewwriter(lua_State *L) {
 		msg = skynet_malloc(sz);
 		memcpy(msg, tmp, sz);
 	}
-	struct boxstm * box = lua_newuserdatauv(L, sizeof(*box), 0);
+	struct boxstm * box = lua_newuserdata(L, sizeof(*box));
 	box->obj = stm_new(msg,sz);
 	lua_pushvalue(L, lua_upvalueindex(1));
 	lua_setmetatable(L, -2);
@@ -182,7 +182,7 @@ struct boxreader {
 
 static int
 lnewreader(lua_State *L) {
-	struct boxreader * box = lua_newuserdatauv(L, sizeof(*box), 0);
+	struct boxreader * box = lua_newuserdata(L, sizeof(*box));
 	box->obj = lua_touserdata(L, 1);
 	box->lastcopy = NULL;
 	lua_pushvalue(L, lua_upvalueindex(1));
