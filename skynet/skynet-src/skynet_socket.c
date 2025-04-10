@@ -107,7 +107,7 @@ skynet_socket_poll() {
 		forward_message(SKYNET_SOCKET_TYPE_WARNING, false, &result);
 		break;
 	default:
-		skynet_error(NULL, "Unknown socket message type %d.",type);
+		skynet_error(NULL, "error: Unknown socket message type %d.",type);
 		return -1;
 	}
 	if (more) {
@@ -117,13 +117,13 @@ skynet_socket_poll() {
 }
 
 int
-skynet_socket_send(struct skynet_context *ctx, int id, void *buffer, int sz) {
-	return socket_server_send(SOCKET_SERVER, id, buffer, sz);
+skynet_socket_sendbuffer(struct skynet_context *ctx, struct socket_sendbuffer *buffer) {
+	return socket_server_send(SOCKET_SERVER, buffer);
 }
 
 int
-skynet_socket_send_lowpriority(struct skynet_context *ctx, int id, void *buffer, int sz) {
-	return socket_server_send_lowpriority(SOCKET_SERVER, id, buffer, sz);
+skynet_socket_sendbuffer_lowpriority(struct skynet_context *ctx, struct socket_sendbuffer *buffer) {
+	return socket_server_send_lowpriority(SOCKET_SERVER, buffer);
 }
 
 int 
@@ -163,6 +163,13 @@ skynet_socket_start(struct skynet_context *ctx, int id) {
 }
 
 void
+skynet_socket_pause(struct skynet_context *ctx, int id) {
+	uint32_t source = skynet_context_handle(ctx);
+	socket_server_pause(SOCKET_SERVER, source, id);
+}
+
+
+void
 skynet_socket_nodelay(struct skynet_context *ctx, int id) {
 	socket_server_nodelay(SOCKET_SERVER, id);
 }
@@ -173,14 +180,26 @@ skynet_socket_udp(struct skynet_context *ctx, const char * addr, int port) {
 	return socket_server_udp(SOCKET_SERVER, source, addr, port);
 }
 
+int
+skynet_socket_udp_dial(struct skynet_context *ctx, const char * addr, int port){
+	uint32_t source = skynet_context_handle(ctx);
+	return socket_server_udp_dial(SOCKET_SERVER, source, addr, port);
+}
+
+int
+skynet_socket_udp_listen(struct skynet_context *ctx, const char * addr, int port){
+	uint32_t source = skynet_context_handle(ctx);
+	return socket_server_udp_listen(SOCKET_SERVER, source, addr, port);
+}
+
 int 
 skynet_socket_udp_connect(struct skynet_context *ctx, int id, const char * addr, int port) {
 	return socket_server_udp_connect(SOCKET_SERVER, id, addr, port);
 }
 
 int 
-skynet_socket_udp_send(struct skynet_context *ctx, int id, const char * address, const void *buffer, int sz) {
-	return socket_server_udp_send(SOCKET_SERVER, id, (const struct socket_udp_address *)address, buffer, sz);
+skynet_socket_udp_sendbuffer(struct skynet_context *ctx, const char * address, struct socket_sendbuffer *buffer) {
+	return socket_server_udp_send(SOCKET_SERVER, (const struct socket_udp_address *)address, buffer);
 }
 
 const char *

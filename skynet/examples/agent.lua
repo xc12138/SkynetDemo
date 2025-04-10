@@ -11,11 +11,6 @@ local CMD = {}
 local REQUEST = {}
 local client_fd
 
-function REQUEST:sayhello()
-	print("recv client sayhello: ",say.what)
-	return {error_code = 0,msg = "Hi,I am Skynet!"}
-end
-
 function REQUEST:get()
 	print("get", self.what)
 	local r = skynet.call("SIMPLEDB", "lua", "get", self.what)

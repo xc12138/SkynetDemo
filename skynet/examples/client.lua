@@ -1,8 +1,8 @@
 package.cpath = "luaclib/?.so"
 package.path = "lualib/?.lua;examples/?.lua"
 
-if _VERSION ~= "Lua 5.3" then
-	error "Use lua 5.3"
+if _VERSION ~= "Lua 5.4" then
+	error "Use lua 5.4"
 end
 
 local socket = require "client.socket"
@@ -45,7 +45,7 @@ local function recv_package(last)
 	if r == "" then
 		error "Server closed"
 	end
-	return unpack_package(last .. r)
+	return recv_package(last .. r)
 end
 
 local session = 0
