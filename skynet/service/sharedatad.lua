@@ -14,7 +14,7 @@ local function newobj(name, tbl)
 	assert(pool[name] == nil)
 	local cobj = sharedata.host.new(tbl)
 	sharedata.host.incref(cobj)
-	local v = { value = tbl , obj = cobj, watch = {} }
+	local v = {obj = cobj, watch = {} }
 	objmap[cobj] = v
 	pool[name] = v
 	pool_count[name] = { n = 0, threshold = 16 }
@@ -89,7 +89,7 @@ function CMD.delete(name)
 end
 
 function CMD.query(name)
-	local v = assert(pool[name])
+	local v = assert(pool[name], name)
 	local obj = v.obj
 	sharedata.host.incref(obj)
 	return v.obj

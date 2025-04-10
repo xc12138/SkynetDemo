@@ -114,7 +114,7 @@ packreq_string(lua_State *L, int session, void * msg, uint32_t sz, int is_push) 
 		if (name == NULL) {
 			luaL_error(L, "name is not a string, it's a %s", lua_typename(L, lua_type(L, 1)));
 		} else {
-			luaL_error(L, "name is too long %s", name);
+			luaL_error(L, "name length is invalid, must be between 1 and 255 characters: %s", name);
 		}
 	}
 
@@ -366,6 +366,8 @@ lunpackrequest(lua_State *L) {
 		msg = luaL_checklstring(L,1,&ssz);
 		sz = (int)ssz;
 	}
+	if (sz == 0)
+		return luaL_error(L, "Invalid req package. size == 0");
 	switch (msg[0]) {
 	case 0:
 		return unpackreq_number(L, (const uint8_t *)msg, sz);
@@ -601,6 +603,11 @@ lnodename(lua_State *L) {
 	pid_t pid = getpid();
 	char hostname[256];
 	if (gethostname(hostname, sizeof(hostname))==0) {
+		int i;
+		for (i=0; hostname[i]; i++) {
+			if (hostname[i] <= ' ')
+				hostname[i] = '_';
+		}
 		lua_pushfstring(L, "%s%d", hostname, (int)pid);
 	} else {
 		lua_pushfstring(L, "noname%d", (int)pid);

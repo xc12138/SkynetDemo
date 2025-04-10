@@ -10,7 +10,6 @@
 #include "skynet_monitor.h"
 #include "skynet_imp.h"
 #include "skynet_log.h"
-#include "skynet_timer.h"
 #include "spinlock.h"
 #include "atomic.h"
 
@@ -46,14 +45,14 @@ struct skynet_context {
 	void * cb_ud;
 	skynet_cb cb;
 	struct message_queue *queue;
-	FILE * logfile;
+	ATOM_POINTER logfile;
 	uint64_t cpu_cost;	// in microsec
 	uint64_t cpu_start;	// in microsec
 	char result[32];
 	uint32_t handle;
 	int session_id;
-	int ref;
-	int message_count;
+	ATOM_INT ref;
+	size_t message_count;
 	bool init;
 	bool endless;
 	bool profile;
@@ -62,28 +61,28 @@ struct skynet_context {
 };
 
 struct skynet_node {
-	int total;
+	ATOM_INT total;
 	int init;
 	uint32_t monitor_exit;
 	pthread_key_t handle_key;
-	bool profile;	// default is off
+	bool profile;	// default is on
 };
 
 static struct skynet_node G_NODE;
 
 int 
 skynet_context_total() {
-	return G_NODE.total;
+	return ATOM_LOAD(&G_NODE.total);
 }
 
 static void
 context_inc() {
-	ATOM_INC(&G_NODE.total);
+	ATOM_FINC(&G_NODE.total);
 }
 
 static void
 context_dec() {
-	ATOM_DEC(&G_NODE.total);
+	ATOM_FDEC(&G_NODE.total);
 }
 
 uint32_t 
@@ -119,7 +118,7 @@ drop_message(struct skynet_message *msg, void *ud) {
 	uint32_t source = d->handle;
 	assert(source);
 	// report error to the message source
-	skynet_send(NULL, source, msg->source, PTYPE_ERROR, 0, NULL, 0);
+	skynet_send(NULL, source, msg->source, PTYPE_ERROR, msg->session, NULL, 0);
 }
 
 struct skynet_context * 
@@ -137,11 +136,11 @@ skynet_context_new(const char * name, const char *param) {
 
 	ctx->mod = mod;
 	ctx->instance = inst;
-	ctx->ref = 2;
+	ATOM_INIT(&ctx->ref , 2);
 	ctx->cb = NULL;
 	ctx->cb_ud = NULL;
 	ctx->session_id = 0;
-	ctx->logfile = NULL;
+	ATOM_INIT(&ctx->logfile, (uintptr_t)NULL);
 
 	ctx->init = false;
 	ctx->endless = false;
@@ -171,7 +170,7 @@ skynet_context_new(const char * name, const char *param) {
 		}
 		return ret;
 	} else {
-		skynet_error(ctx, "FAILED launch %s", name);
+		skynet_error(ctx, "error: launch %s FAILED", name);
 		uint32_t handle = ctx->handle;
 		skynet_context_release(ctx);
 		skynet_handle_retire(handle);
@@ -194,7 +193,7 @@ skynet_context_newsession(struct skynet_context *ctx) {
 
 void 
 skynet_context_grab(struct skynet_context *ctx) {
-	ATOM_INC(&ctx->ref);
+	ATOM_FINC(&ctx->ref);
 }
 
 void
@@ -207,8 +206,9 @@ skynet_context_reserve(struct skynet_context *ctx) {
 
 static void 
 delete_context(struct skynet_context *ctx) {
-	if (ctx->logfile) {
-		fclose(ctx->logfile);
+	FILE *f = (FILE *)ATOM_LOAD(&ctx->logfile);
+	if (f) {
+		fclose(f);
 	}
 	skynet_module_instance_release(ctx->mod, ctx->instance);
 	skynet_mq_mark_release(ctx->queue);
@@ -219,7 +219,7 @@ delete_context(struct skynet_context *ctx) {
 
 struct skynet_context * 
 skynet_context_release(struct skynet_context *ctx) {
-	if (ATOM_DEC(&ctx->ref) == 0) {
+	if (ATOM_FDEC(&ctx->ref) == 1) {
 		delete_context(ctx);
 		return NULL;
 	}
@@ -264,8 +264,9 @@ dispatch_message(struct skynet_context *ctx, struct skynet_message *msg) {
 	pthread_setspecific(G_NODE.handle_key, (void *)(uintptr_t)(ctx->handle));
 	int type = msg->sz >> MESSAGE_TYPE_SHIFT;
 	size_t sz = msg->sz & MESSAGE_TYPE_MASK;
-	if (ctx->logfile) {
-		skynet_log_output(ctx->logfile, msg->source, type, msg->session, msg->data, sz);
+	FILE *f = (FILE *)ATOM_LOAD(&ctx->logfile);
+	if (f) {
+		skynet_log_output(f, msg->source, type, msg->session, msg->data, sz);
 	}
 	++ctx->message_count;
 	int reserve_msg;
@@ -323,7 +324,7 @@ skynet_context_message_dispatch(struct skynet_monitor *sm, struct message_queue 
 		}
 		int overload = skynet_mq_overload(q);
 		if (overload) {
-			skynet_error(ctx, "May overload, message queue length = %d", overload);
+			skynet_error(ctx, "error: May overload, message queue length = %d", overload);
 		}
 
 		skynet_monitor_trigger(sm, msg.source , handle);
@@ -369,7 +370,7 @@ skynet_queryname(struct skynet_context * context, const char * name) {
 	case '.':
 		return skynet_handle_findname(name + 1);
 	}
-	skynet_error(context, "Don't support query global name %s",name);
+	skynet_error(context, "error: Don't support query global name %s",name);
 	return 0;
 }
 
@@ -412,7 +413,7 @@ cmd_reg(struct skynet_context * context, const char * param) {
 	} else if (param[0] == '.') {
 		return skynet_handle_namehandle(context->handle, param + 1);
 	} else {
-		skynet_error(context, "Can't register global name %s in C", param);
+		skynet_error(context, "error: Can't register global name %s in C", param);
 		return NULL;
 	}
 }
@@ -445,7 +446,7 @@ cmd_name(struct skynet_context * context, const char * param) {
 	if (name[0] == '.') {
 		return skynet_handle_namehandle(handle_id, name + 1);
 	} else {
-		skynet_error(context, "Can't set global name %s in C", name);
+		skynet_error(context, "error: Can't set global name %s in C", name);
 	}
 	return NULL;
 }
@@ -464,7 +465,7 @@ tohandle(struct skynet_context * context, const char * param) {
 	} else if (param[0] == '.') {
 		handle = skynet_handle_findname(param+1);
 	} else {
-		skynet_error(context, "Can't convert %s to handle",param);
+		skynet_error(context, "error: Can't convert %s to handle",param);
 	}
 
 	return handle;
@@ -573,7 +574,7 @@ cmd_stat(struct skynet_context * context, const char * param) {
 			strcpy(context->result, "0");
 		}
 	} else if (strcmp(param, "message") == 0) {
-		sprintf(context->result, "%d", context->message_count);
+		sprintf(context->result, "%zu", context->message_count);
 	} else {
 		context->result[0] = '\0';
 	}
@@ -589,11 +590,11 @@ cmd_logon(struct skynet_context * context, const char * param) {
 	if (ctx == NULL)
 		return NULL;
 	FILE *f = NULL;
-	FILE * lastf = ctx->logfile;
+	FILE * lastf = (FILE *)ATOM_LOAD(&ctx->logfile);
 	if (lastf == NULL) {
 		f = skynet_log_open(context, handle);
 		if (f) {
-			if (!ATOM_CAS_POINTER(&ctx->logfile, NULL, f)) {
+			if (!ATOM_CAS_POINTER(&ctx->logfile, 0, (uintptr_t)f)) {
 				// logfile opens in other thread, close this one.
 				fclose(f);
 			}
@@ -611,10 +612,10 @@ cmd_logoff(struct skynet_context * context, const char * param) {
 	struct skynet_context * ctx = skynet_handle_grab(handle);
 	if (ctx == NULL)
 		return NULL;
-	FILE * f = ctx->logfile;
+	FILE * f = (FILE *)ATOM_LOAD(&ctx->logfile);
 	if (f) {
 		// logfile may close in other thread
-		if (ATOM_CAS_POINTER(&ctx->logfile, f, NULL)) {
+		if (ATOM_CAS_POINTER(&ctx->logfile, (uintptr_t)f, (uintptr_t)NULL)) {
 			skynet_log_close(context, f, handle);
 		}
 	}
@@ -699,7 +700,7 @@ _filter_args(struct skynet_context * context, int type, int *session, void ** da
 int
 skynet_send(struct skynet_context * context, uint32_t source, uint32_t destination , int type, int session, void * data, size_t sz) {
 	if ((sz & MESSAGE_TYPE_MASK) != sz) {
-		skynet_error(context, "The message to %x is too large", destination);
+		skynet_error(context, "error: The message to %x is too large", destination);
 		if (type & PTYPE_TAG_DONTCOPY) {
 			skynet_free(data);
 		}
@@ -713,7 +714,7 @@ skynet_send(struct skynet_context * context, uint32_t source, uint32_t destinati
 
 	if (destination == 0) {
 		if (data) {
-			skynet_error(context, "Destination address can't be 0");
+			skynet_error(context, "error: Destination address can't be 0");
 			skynet_free(data);
 			return -1;
 		}
@@ -760,7 +761,7 @@ skynet_sendname(struct skynet_context * context, uint32_t source, const char * a
 		}
 	} else {
 		if ((sz & MESSAGE_TYPE_MASK) != sz) {
-			skynet_error(context, "The message to %s is too large", addr);
+			skynet_error(context, "error: The message to %s is too large", addr);
 			if (type & PTYPE_TAG_DONTCOPY) {
 				skynet_free(data);
 			}
@@ -806,7 +807,7 @@ skynet_context_send(struct skynet_context * ctx, void * msg, size_t sz, uint32_t
 
 void 
 skynet_globalinit(void) {
-	G_NODE.total = 0;
+	ATOM_INIT(&G_NODE.total , 0);
 	G_NODE.monitor_exit = 0;
 	G_NODE.init = 1;
 	if (pthread_key_create(&G_NODE.handle_key, NULL)) {
